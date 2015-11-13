@@ -1,158 +1,242 @@
 package jope;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.RoundingMode;
+
 public class Hgd {
 
+	private final static double TWO_322 = Math.pow(2, 32) - 1;
+
+	// some repeated big integer/decimal literals
+	private final static BigInteger int10 = new BigInteger("10");
+	private final static BigDecimal decHalf = new BigDecimal("0.5");
+	private final static BigDecimal dec2 = new BigDecimal("2");
+	private final static BigDecimal dec3 = new BigDecimal("3");
+	private final static BigDecimal dec4 = new BigDecimal("4");
+	private final static BigDecimal dec16 = new BigDecimal("16");
+
+	private static final int sqrtPrecision = 10;
+	private static final BigDecimal SQRT_PRE = new BigDecimal(10).pow(sqrtPrecision);
+
+	/**
+	 * Private utility method used to compute the square root of a BigDecimal.
+	 */
+	private static BigDecimal sqrtNewtonRaphson(BigDecimal c, BigDecimal xn, BigDecimal precision) {
+		BigDecimal fx = xn.pow(2).add(c.negate());
+		BigDecimal fpx = xn.multiply(new BigDecimal(2));
+		BigDecimal xn1 = fx.divide(fpx, 2 * sqrtPrecision, RoundingMode.HALF_DOWN);
+		xn1 = xn.add(xn1.negate());
+		BigDecimal currentSquare = xn1.pow(2);
+		BigDecimal currentPrecision = currentSquare.subtract(c);
+		currentPrecision = currentPrecision.abs();
+
+		if (currentPrecision.compareTo(precision) <= -1)
+			return xn1;
+
+		return sqrtNewtonRaphson(c, xn1, precision);
+	}
+
+	/**
+	 * Uses Newton Raphson to compute the square root of a BigDecimal.
+	 */
+	private static BigDecimal bigSqrt(BigDecimal c) {
+		return sqrtNewtonRaphson(c, new BigDecimal(1), new BigDecimal(1).divide(SQRT_PRE));
+	}
+
+	/**
+	 *
+	 * @param coins
+	 * @return
+	 */
 	public static double prngDraw(Coins coins) {
 
 		long out = 0;
 		for (int i = 0; i < 32; i++)
+			// TODO don't calculate powers every time
 			out += coins.next() ? Math.pow(2, i) : 0;
 
-		return out / (Math.pow(2, 32) - 1);
+		return out / TWO_322;
 	}
 
-	/**
-	 * Calculates logarithm of i factorial: ln(i!) Uses Stirling's approximation to do so.
-	 */
-	private static double afc(int i) {
-
-		if (i < 0)
-			throw new RuntimeException("value less than 0");
-		else if (i == 0)
-			return 0;
-
-		double frac12 = 1.0 / 12;
-		double frac360 = 1.0 / 360;
-		double fracPi = 0.5 * Math.log(2 * Math.PI);
-
-		return (i + 0.5) * Math.log(i) - i + frac12 / i - frac360 / i / i / i + fracPi;
-	}
-
-	public static long rhyper(long kk, long nn1, long nn2, Coins coins) {
-
-		if (kk > 10)
+	public static BigInteger rhyper(BigInteger kk, BigInteger nn1, BigInteger nn2, Coins coins) {
+		if (kk.compareTo(int10) > 0)
 			return hypergeometricHrua(coins, nn1, nn2, kk);
 		else
 			return hypergeometricHyp(coins, nn1, nn2, kk);
-
 	}
 
-	private static long hypergeometricHyp(Coins coins, long good, long bad, long sample) {
-		long d1 = bad + good - sample;
-		double d2 = Math.min(bad, good);
+	private static BigInteger hypergeometricHyp(Coins coins, BigInteger good, BigInteger bad,
+			BigInteger sample) {
 
-		double Y = d2;
-		long K = sample;
+		BigDecimal d1 = new BigDecimal(bad.add(good).subtract(sample));
+		BigDecimal d2 = new BigDecimal(bad.min(good));
 
-		while (Y > 0) {
-			double U = prngDraw(coins);
-			Y -= (int) (Math.floor(U + Y / (d1 + K)));
-			K -= 1;
+		BigDecimal Y = d2;
+		BigDecimal K = new BigDecimal(sample);
 
-			if (K == 0)
+		while (Y.compareTo(BigDecimal.ZERO) > 0) {
+			BigDecimal U = BigDecimal.valueOf(prngDraw(coins));
+
+			BigDecimal d1K = d1.add(K);
+			BigDecimal inner = U.add(Y.divide(d1K, OPE.PRECISION, OPE.RM)).setScale(0,
+					RoundingMode.FLOOR);
+			Y = Y.subtract(inner);
+
+			K = K.subtract(BigDecimal.ONE);
+			if (K.compareTo(BigDecimal.ZERO) == 0)
 				break;
 		}
 
-		long Z = (long) (d2 - Y);
-		if (good > bad)
-			Z = sample - Z;
+		BigInteger Z = d2.subtract(Y).toBigInteger();
+		if (good.compareTo(bad) > 0)
+			Z = sample.subtract(Z);
 
 		return Z;
 	}
 
-	private static long hypergeometricHrua(Coins coins, long good, long bad, long sample) {
-		double D1 = 1.7155277699214135;
-		double D2 = 0.8989161620588988;
+	private final static BigDecimal D1 = new BigDecimal("1.7155277699214135");
+	private final static BigDecimal D2 = new BigDecimal("0.8989161620588988");
 
-		long mingoodbad = Math.min(good, bad);
-		long popsize = good + bad;
-		long maxgoodbad = Math.max(good, bad);
-		long m = Math.min(sample, popsize - sample);
-		double d4 = (double) mingoodbad / popsize;
-		double d5 = 1.0 - d4;
-		double d6 = m * d4 + 0.5;
-		double d7 = Math.sqrt((popsize - m) * sample * d4 * d5 / (popsize - 1) + 0.5);
-		double d8 = D1 * d7 + D2;
-		double d9 = (long) (Math.floor((m + 1) * (mingoodbad + 1) / (popsize + 2)));
-		double d10 = loggam(d9 + 1) + loggam(mingoodbad - d9 + 1) + loggam(m - d9 + 1)
-				+ loggam(maxgoodbad - m + d9 + 1);
-		double d11 = Math.min(Math.min(m, mingoodbad) + 1.0, Math.floor(d6 + 16 * d7));
+	private static BigInteger hypergeometricHrua(Coins coins, BigInteger good, BigInteger bad,
+			BigInteger sampleBI) {
 
-		long Z = 0;
+		boolean moreGood;
+		BigDecimal badBD = new BigDecimal(bad);
+		BigDecimal goodBD = new BigDecimal(good);
+		BigDecimal mingoodbad;
+		BigDecimal maxgoodbad;
+		if (good.compareTo(bad) > 0) {
+			moreGood = true;
+			mingoodbad = badBD;
+			maxgoodbad = goodBD;
+
+		} else {
+			moreGood = false;
+			mingoodbad = goodBD;
+			maxgoodbad = badBD;
+		}
+
+		BigDecimal popsize = new BigDecimal(good.add(bad));
+		BigDecimal sample = new BigDecimal(sampleBI);
+		BigDecimal m = sample.min(popsize.subtract(sample));
+		BigDecimal d4 = mingoodbad.divide(popsize, OPE.PRECISION, OPE.RM);
+		BigDecimal d5 = BigDecimal.ONE.subtract(d4);
+		BigDecimal d6 = m.multiply(d4).add(decHalf);
+
+		BigDecimal d7a = popsize.subtract(m).multiply(sample).multiply(d4).multiply(d5)
+				.divide(popsize.subtract(BigDecimal.ONE), OPE.PRECISION, OPE.RM).add(decHalf);
+		BigDecimal d7 = bigSqrt(d7a);
+
+		BigDecimal d8 = D1.multiply(d7).add(D2);
+
+		BigDecimal mingoodbadplus1 = mingoodbad.add(BigDecimal.ONE);
+		BigDecimal d9 = m.add(BigDecimal.ONE).multiply(mingoodbadplus1)
+				.divide(popsize.add(dec2), OPE.PRECISION, OPE.RM);
+
+		BigDecimal d9plus1 = d9.add(BigDecimal.ONE);
+		BigDecimal d10 = loggam(d9plus1).add(loggam(mingoodbadplus1.subtract(d9)))
+				.add(loggam(m.subtract(d9).add(BigDecimal.ONE)))
+				.add(loggam(maxgoodbad.subtract(m).add(d9plus1)));
+
+		BigDecimal d11a = m.min(mingoodbad).add(BigDecimal.ONE);
+		BigDecimal d11b = d6.add(d7.multiply(dec16)).setScale(0, RoundingMode.FLOOR);
+		BigDecimal d11 = d11a.min(d11b);
+
+		BigDecimal Z;
 		while (true) {
-			double X = prngDraw(coins);
-			double Y = prngDraw(coins);
+			BigDecimal X = BigDecimal.valueOf(prngDraw(coins));
+			BigDecimal Y = BigDecimal.valueOf(prngDraw(coins));
+			BigDecimal W = d6
+					.add(d8.multiply(Y.subtract(decHalf)).divide(X, OPE.PRECISION, OPE.RM));
 
-			System.out.println(X + " " + Y);
-
-			double W = d6 + d8 * (Y - 0.5) / X;
-
-			if (W < 0.0 || W >= d11)
+			if (W.compareTo(BigDecimal.ZERO) < 0 || W.compareTo(d11) >= 0)
 				continue;
 
-			Z = (long) Math.floor(W);
-			double T = d10
-					- (loggam(Z + 1) + loggam(mingoodbad - Z + 1) + loggam(m - Z + 1) + loggam(maxgoodbad
-							- m + Z + 1));
+			Z = W.setScale(0, RoundingMode.FLOOR);
 
-			if ((X * (4.0 - X) - 3.0) <= T)
+			BigDecimal Zplus1 = Z.add(BigDecimal.ONE);
+			BigDecimal Zminus1 = Z.subtract(BigDecimal.ONE);
+			BigDecimal T = d10.subtract(loggam(Zplus1).add(loggam(mingoodbad.subtract(Zminus1)))
+					.add(loggam(m.subtract(Zminus1)))
+					.add(loggam(maxgoodbad.subtract(m).add(Zplus1))));
+
+			if (X.multiply(dec4.subtract(X)).subtract(dec3).compareTo(T) <= 0)
 				break;
 
-			if (X * (X - T) >= 1)
+			if (X.multiply(X.subtract(T)).compareTo(BigDecimal.ONE) >= 0)
 				continue;
 
-			if (2.0 * Math.log(X) <= T)
+			// TODO: using double precision for log
+			if (new BigDecimal(2.0 * Math.log(X.doubleValue())).compareTo(T) <= 0)
 				break;
 		}
 
-		if (good > bad)
-			Z = m - Z;
+		if (moreGood)
+			Z = m.subtract(Z);
 
-		if (m < sample)
-			Z = good - Z;
+		if (m.compareTo(sample) < 0)
+			Z = goodBD.subtract(Z);
 
-		return Z;
+		return Z.toBigInteger();
 	}
 
-	private static double loggam(double x) {
+	private static BigDecimal loggam(BigDecimal x) {
 
 		double[] a = new double[] { 8.333333333333333e-02, -2.777777777777778e-03,
 				7.936507936507937e-04, -5.952380952380952e-04, 8.417508417508418e-04,
 				-1.917526917526918e-03, 6.410256410256410e-03, -2.955065359477124e-02,
 				1.796443723688307e-01, -1.39243221690590e+00 };
 
-		x *= 1.0;
-		double x0 = x;
+		BigDecimal x0 = x;
 		int n = 0;
 
-		if (x == 1.0 || x == 2.0)
-			return 0.0;
-		else if (x <= 7.0) {
-			n = (int) (7 - x);
-			x0 = x + n;
+		if (x.compareTo(BigDecimal.ONE) == 0 || x.compareTo(new BigDecimal("2.0")) == 0)
+			return BigDecimal.ZERO;
+		else if (x.compareTo(new BigDecimal("7.0")) <= 0) {
+			n = (int) (7.0 - x.doubleValue());
+			x0 = x.add(new BigDecimal(n));
 		}
 
-		double x2 = 1.0 / (x0 * x0);
+		BigDecimal x2 = BigDecimal.ONE.divide(x0.multiply(x0), OPE.PRECISION, OPE.RM);
 		double xp = 2 * Math.PI;
 		double gl0 = a[9];
 
+		// TODO double precision used
+		double x2d = x2.doubleValue();
 		for (int k = 8; k >= 0; k--) {
-			gl0 *= x2;
+			gl0 *= x2d;
+
 			gl0 += a[k];
 		}
 
-		double gl = gl0 / x0 + 0.5 * Math.log(xp) + (x0 - 0.5) * Math.log(x0) - x0;
+		// double precision
+		BigDecimal gl = new BigDecimal(gl0)
+				.divide(x0, OPE.PRECISION, OPE.RM)
+				.add(new BigDecimal(0.5 * Math.log(xp)))
+				.add(x0.subtract(new BigDecimal("0.5")).multiply(
+						new BigDecimal(Math.log(x0.doubleValue())))).subtract(x0);
 
-		if (x <= 7.0)
+		if (x.compareTo(new BigDecimal("7.0")) <= 0) {
+
+			// double precision
+			double x0d = x0.doubleValue();
+			double gld = gl.doubleValue();
+
 			for (int k = 1; k <= n + 1; k++) {
-				gl -= Math.log(x0 - 1.0);
-				x0 -= 1.0;
+				gld -= Math.log(x0d - 1.0);
+				x0d -= 1.0;
 			}
+
+			gl = new BigDecimal(gld);
+		}
 
 		return gl;
 	}
 
 	public static void main(String[] args) {
 
+		System.out.println(bigSqrt(new BigDecimal("213.57")));
+		System.out.println(Math.sqrt(213.57));
 	}
 }

@@ -1,9 +1,9 @@
 package jope;
 
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
-import java.util.Arrays;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
@@ -12,27 +12,28 @@ import javax.crypto.Mac;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
+/**
+ * Return a bit string, generated from the given data string
+ *
+ * @author savvas
+ *
+ */
 public class Coins {
 
-	String data = null;
 	Cipher cipher = null;
 	SecretKeySpec k;
 	byte[] counterBA;
 	long counter;
 	ByteBuffer buffer;
 
-	public Coins(long d) {
-		this.data = Long.toString(d);
-
-		String key = "key";
-		this.data = "5";
+	public Coins(String key, BigInteger d) {
 
 		try {
 			// derive a key using the data to use in AES
 			Mac sha256_HMAC = Mac.getInstance("HmacSHA256");
 			SecretKeySpec secret_key = new SecretKeySpec(key.getBytes("UTF-8"), "HmacSHA256");
 			sha256_HMAC.init(secret_key);
-			byte[] digest = sha256_HMAC.doFinal(this.data.getBytes("UTF-8"));
+			byte[] digest = sha256_HMAC.doFinal(d.toString().getBytes("UTF-8"));
 
 			this.cipher = Cipher.getInstance("AES/CTR/NoPadding"); // PKCS5Padding
 
@@ -40,7 +41,7 @@ public class Coins {
 			// Files
 			this.k = new SecretKeySpec(digest, "AES");
 
-			// TODO FIXME
+			// FIXME: all 0 IV
 			this.buffer = ByteBuffer.allocate(Long.BYTES);
 			this.counterBA = new byte[16];
 			this.counter = 0;
@@ -131,9 +132,6 @@ public class Coins {
 	}
 
 	public static void main(String[] args) throws Exception {
-		Coins c = new Coins(5);
-
-		System.out.println(Arrays.toString(Coins.byteToBoolArray((byte) 257)));
 
 	}
 }

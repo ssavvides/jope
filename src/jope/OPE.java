@@ -1,18 +1,32 @@
 package jope;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.RoundingMode;
+
 public class OPE {
 
-	byte[] key;
+	final static int PRECISION = 100;
+	final static RoundingMode RM = RoundingMode.HALF_UP;
+
+	String key;
 	ValueRange inRange;
 	ValueRange outRange;
 
 	public OPE() {
-		this.key = "key".getBytes();
-		this.inRange = new ValueRange((long) -Math.pow(2, 32), (long) Math.pow(2, 32));
-		this.outRange = new ValueRange((long) -Math.pow(2, 48), (long) Math.pow(2, 48));
+
+		this.key = "key";
+
+		this.inRange = new ValueRange(new BigInteger("2").pow(32).negate(),
+				new BigInteger("2").pow(32));
+		this.outRange = new ValueRange(new BigInteger("2").pow(48).negate(),
+				new BigInteger("2").pow(48));
+
+		// this.inRange = new ValueRange(BigInteger.ZERO, new BigInteger("100"));
+		// this.outRange = new ValueRange(BigInteger.ZERO, new BigInteger("200"));
 	}
 
-	private long encrypt(long ptxt) {
+	private BigInteger encrypt(BigInteger ptxt) {
 
 		if (!this.inRange.contains(ptxt))
 			throw new RuntimeException("Plaintext is not within the input range");
@@ -20,41 +34,42 @@ public class OPE {
 		return this.encryptRecursive(ptxt, this.inRange, this.outRange);
 	}
 
-	private long encryptRecursive(long ptxt, ValueRange inRange, ValueRange outRange) {
+	private BigInteger encryptRecursive(BigInteger ptxt, ValueRange inRange, ValueRange outRange) {
 
-		long inSize = inRange.size();
-		long outSize = outRange.size();
-		long inEdge = inRange.start - 1;
-		long outEdge = outRange.start - 1;
-		long mid = outEdge + (long) (Math.ceil(outSize / 2.0));
-		// System.out.println(inSize + " " + outSize + " " + inEdge + " " + outEdge + " " + mid);
+		BigInteger inSize = inRange.size();
+		BigInteger outSize = outRange.size();
 
-		assert inSize <= outSize;
+		assert inSize.compareTo(outSize) <= 0;
 
-		if (inRange.size() == 1) {
-			Coins coins = new Coins(ptxt);
-			long ctxt = sampleUniform(outRange, coins);
-			return ctxt;
+		if (inRange.size().compareTo(BigInteger.ONE) == 0) {
+			Coins coins = new Coins(this.key, ptxt);
+			return sampleUniform(outRange, coins);
 		}
 
-		Coins coins = new Coins(mid);
+		BigInteger inEdge = inRange.start.subtract(BigInteger.ONE);
+		BigInteger outEdge = outRange.start.subtract(BigInteger.ONE);
 
-		System.out.println("h");
-		long x = sampleHGD(inRange, outRange, mid, coins);
-		System.out.println("h2");
+		BigDecimal two = new BigDecimal("2");
+		BigInteger m = new BigDecimal(outSize).divide(two, PRECISION, RoundingMode.CEILING)
+				.toBigInteger();
+		BigInteger mid = outEdge.add(m);
 
-		if (ptxt <= x) {
-			inRange = new ValueRange(inEdge + 1, x);
-			outRange = new ValueRange(outEdge + 1, mid);
+		Coins coins = new Coins(this.key, mid);
+
+		BigInteger x = sampleHGD(inRange, outRange, mid, coins);
+
+		if (ptxt.compareTo(x) <= 0) {
+			inRange = new ValueRange(inEdge.add(BigInteger.ONE), x);
+			outRange = new ValueRange(outEdge.add(BigInteger.ONE), mid);
 		} else {
-			inRange = new ValueRange(x + 1, inEdge + inSize);
-			outRange = new ValueRange(mid + 1, outEdge + outSize);
+			inRange = new ValueRange(x.add(BigInteger.ONE), inEdge.add(inSize));
+			outRange = new ValueRange(mid.add(BigInteger.ONE), outEdge.add(outSize));
 		}
 
 		return this.encryptRecursive(ptxt, inRange, outRange);
 	}
 
-	private long decrypt(long ctxt) {
+	private BigInteger decrypt(BigInteger ctxt) {
 
 		if (!this.outRange.contains(ctxt))
 			throw new RuntimeException("Ciphertext is not within the input range");
@@ -62,36 +77,41 @@ public class OPE {
 		return this.decryptRecursive(ctxt, this.inRange, this.outRange);
 	}
 
-	private long decryptRecursive(long ctxt, ValueRange inRange, ValueRange outRange) {
+	private BigInteger decryptRecursive(BigInteger ctxt, ValueRange inRange, ValueRange outRange) {
 
-		long inSize = inRange.size();
-		long outSize = outRange.size();
-		long inEdge = inRange.start - 1;
-		long outEdge = outRange.start - 1;
-		long mid = outEdge + (long) (Math.ceil(outSize / 2.0));
+		BigInteger inSize = inRange.size();
+		BigInteger outSize = outRange.size();
 
-		assert inSize <= outSize;
+		assert inSize.compareTo(outSize) <= 0;
 
-		if (inRange.size() == 1) {
-			long inRangeMin = inRange.start;
-			Coins coins = new Coins(inRangeMin);
-			long sampledCtxt = sampleUniform(outRange, coins);
+		if (inRange.size().compareTo(BigInteger.ONE) == 0) {
+			BigInteger inRangeMin = inRange.start;
+			Coins coins = new Coins(this.key, inRangeMin);
+			BigInteger sampledCtxt = sampleUniform(outRange, coins);
 
-			if (sampledCtxt == ctxt)
+			if (sampledCtxt.compareTo(ctxt) == 0)
 				return inRangeMin;
 			else
 				throw new RuntimeException("Invalid ciphertext");
+
 		}
 
-		Coins coins = new Coins(mid);
-		long x = sampleHGD(inRange, outRange, mid, coins);
+		BigInteger inEdge = inRange.start.subtract(BigInteger.ONE);
+		BigInteger outEdge = outRange.start.subtract(BigInteger.ONE);
+		BigDecimal two = new BigDecimal("2");
+		BigInteger m = new BigDecimal(outSize).divide(two, PRECISION, RoundingMode.CEILING)
+				.toBigInteger();
+		BigInteger mid = outEdge.add(m);
 
-		if (ctxt <= mid) {
-			inRange = new ValueRange(inEdge + 1, x);
-			outRange = new ValueRange(outEdge + 1, mid);
+		Coins coins = new Coins(this.key, mid);
+		BigInteger x = sampleHGD(inRange, outRange, mid, coins);
+
+		if (ctxt.compareTo(mid) <= 0) {
+			inRange = new ValueRange(inEdge.add(BigInteger.ONE), x);
+			outRange = new ValueRange(outEdge.add(BigInteger.ONE), mid);
 		} else {
-			inRange = new ValueRange(x + 1, inEdge + inSize);
-			outRange = new ValueRange(mid + 1, outEdge + outSize);
+			inRange = new ValueRange(x.add(BigInteger.ONE), inEdge.add(inSize));
+			outRange = new ValueRange(mid.add(BigInteger.ONE), outEdge.add(outSize));
 		}
 
 		return this.decryptRecursive(ctxt, inRange, outRange);
@@ -104,51 +124,55 @@ public class OPE {
 	 * @param coins
 	 * @return
 	 */
-	private static long sampleUniform(ValueRange inRange, Coins coins) {
+	private static BigInteger sampleUniform(ValueRange inRange, Coins coins) {
 
 		ValueRange curRange = new ValueRange(inRange);
 
-		assert curRange.size() != 0;
+		assert curRange.size().compareTo(BigInteger.ZERO) != 0;
 
-		while (curRange.size() > 1) {
-			int mid = (int) (Math.floor((curRange.start + curRange.end) / 2));
+		while (curRange.size().compareTo(BigInteger.ONE) > 0) {
+
+			// System.out.println(curRange.start + " " + curRange.end);
+
+			BigInteger mid = curRange.start.add(curRange.end).divide(new BigInteger("2"));
+
 			boolean bit = coins.next();
-
 			if (bit == false)
 				curRange.end = mid;
 			else if (bit == true)
-				curRange.start = mid + 1;
+				curRange.start = mid.add(BigInteger.ONE);
 			else
 				throw new RuntimeException("Unexpected bit value");
 		}
 
-		assert curRange.size() == 1;
+		assert curRange.size().compareTo(BigInteger.ZERO) != 0;
 
 		return curRange.start;
 	}
 
-	private static long sampleHGD(ValueRange inRange, ValueRange outRange, long nSample, Coins coins) {
+	private static BigInteger sampleHGD(ValueRange inRange, ValueRange outRange,
+			BigInteger nSample, Coins coins) {
 
-		long inSize = inRange.size();
-		long outSize = outRange.size();
+		BigInteger inSize = inRange.size();
+		BigInteger outSize = outRange.size();
 
-		assert inSize > 0 && outSize > 0;
-		assert inSize <= outSize;
+		assert inSize.compareTo(BigInteger.ZERO) > 0 && outSize.compareTo(BigInteger.ZERO) > 0;
+		assert inSize.compareTo(outSize) <= 0;
 		assert outRange.contains(nSample);
 
-		long nSampleIndex = nSample - outRange.start + 1;
+		BigInteger nSampleIndex = nSample.subtract(outRange.start).add(BigInteger.ONE);
 
-		if (inSize == outSize)
-			return inRange.start + nSampleIndex - 1;
+		if (inSize.compareTo(outSize) == 0)
+			return inRange.start.add(nSampleIndex).subtract(BigInteger.ONE);
 
-		long inSampleNum = Hgd.rhyper(nSampleIndex, inSize, outSize, coins);
+		BigInteger inSampleNum = Hgd.rhyper(nSampleIndex, inSize, outSize, coins);
 
-		if (inSampleNum == 0)
+		if (inSampleNum.compareTo(BigInteger.ZERO) == 0)
 			return inRange.start;
-		else if (inSampleNum == inSize)
+		else if (inSampleNum.compareTo(inSize) == 0)
 			return inRange.end;
 		else {
-			long inSample = inRange.start + inSampleNum;
+			BigInteger inSample = inRange.start.add(inSampleNum);
 
 			assert inRange.contains(inSample);
 
@@ -159,18 +183,17 @@ public class OPE {
 	public static void main(String[] args) {
 		OPE o = new OPE();
 
-		for (int i = 0; i <= 99999; i++) {
+		for (int i = -999999; i <= 999999; i++) {
 
-			System.out.println(i);
+			BigInteger p = new BigInteger("" + i);
+			BigInteger e = o.encrypt(p);
+			BigInteger d = o.decrypt(e);
 
-			long e = o.encrypt(i);
-			long d = o.decrypt(e);
+			if (d.compareTo(p) != 0)
+				throw new RuntimeException("failed: " + p + " " + d);
 
-			if (d != i)
-				throw new RuntimeException("failed: " + i + " " + d);
-
-			// System.out.println(e);
-			// System.out.println(d);
+			if (i % 1000 == 0)
+				System.out.println(e + " " + d);
 		}
 
 		System.out.println("done");
