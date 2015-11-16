@@ -6,18 +6,21 @@ import java.math.RoundingMode;
 
 public class Hgd {
 
-	private final static double TWO_322 = Math.pow(2, 32) - 1;
+	private final static double TWO_32 = Math.pow(2, 32) - 1;
+
+	private static final int bdPrecision = 20;
+	private static final BigDecimal SQRT_PRE = new BigDecimal(10).pow(bdPrecision);
 
 	// some repeated big integer/decimal literals
-	private final static BigInteger int10 = new BigInteger("10");
-	private final static BigDecimal decHalf = new BigDecimal("0.5");
-	private final static BigDecimal dec2 = new BigDecimal("2");
-	private final static BigDecimal dec3 = new BigDecimal("3");
-	private final static BigDecimal dec4 = new BigDecimal("4");
-	private final static BigDecimal dec16 = new BigDecimal("16");
-
-	private static final int sqrtPrecision = 10;
-	private static final BigDecimal SQRT_PRE = new BigDecimal(10).pow(sqrtPrecision);
+	private final static BigDecimal decHalf = BigDecimal.valueOf(0.5);
+	private final static BigDecimal dec2 = BigDecimal.valueOf(2);
+	private final static BigDecimal dec3 = BigDecimal.valueOf(3);
+	private final static BigDecimal dec4 = BigDecimal.valueOf(4);
+	private final static BigDecimal dec7 = BigDecimal.valueOf(7);
+	private final static BigDecimal dec16 = BigDecimal.valueOf(16);
+	private final static BigDecimal dec2p = BigDecimal.valueOf(2 * Math.PI);
+	private final static BigDecimal log2p = decHalf
+			.multiply(BigDecimalUtils.ln(dec2p, bdPrecision));
 
 	/**
 	 * Private utility method used to compute the square root of a BigDecimal.
@@ -25,7 +28,7 @@ public class Hgd {
 	private static BigDecimal sqrtNewtonRaphson(BigDecimal c, BigDecimal xn, BigDecimal precision) {
 		BigDecimal fx = xn.pow(2).add(c.negate());
 		BigDecimal fpx = xn.multiply(new BigDecimal(2));
-		BigDecimal xn1 = fx.divide(fpx, 2 * sqrtPrecision, RoundingMode.HALF_DOWN);
+		BigDecimal xn1 = fx.divide(fpx, 2 * bdPrecision, RoundingMode.HALF_DOWN);
 		xn1 = xn.add(xn1.negate());
 		BigDecimal currentSquare = xn1.pow(2);
 		BigDecimal currentPrecision = currentSquare.subtract(c);
@@ -41,7 +44,7 @@ public class Hgd {
 	 * Uses Newton Raphson to compute the square root of a BigDecimal.
 	 */
 	private static BigDecimal bigSqrt(BigDecimal c) {
-		return sqrtNewtonRaphson(c, new BigDecimal(1), new BigDecimal(1).divide(SQRT_PRE));
+		return sqrtNewtonRaphson(c, BigDecimal.ONE, BigDecimal.ONE.divide(SQRT_PRE));
 	}
 
 	/**
@@ -56,11 +59,11 @@ public class Hgd {
 			// TODO don't calculate powers every time
 			out += coins.next() ? Math.pow(2, i) : 0;
 
-		return out / TWO_322;
+		return out / TWO_32;
 	}
 
 	public static BigInteger rhyper(BigInteger kk, BigInteger nn1, BigInteger nn2, Coins coins) {
-		if (kk.compareTo(int10) > 0)
+		if (kk.compareTo(BigInteger.TEN) > 0)
 			return hypergeometricHrua(coins, nn1, nn2, kk);
 		else
 			return hypergeometricHyp(coins, nn1, nn2, kk);
@@ -167,8 +170,7 @@ public class Hgd {
 			if (X.multiply(X.subtract(T)).compareTo(BigDecimal.ONE) >= 0)
 				continue;
 
-			// TODO: using double precision for log
-			if (new BigDecimal(2.0 * Math.log(X.doubleValue())).compareTo(T) <= 0)
+			if (dec2.multiply(BigDecimalUtils.ln(X, bdPrecision)).compareTo(T) <= 0)
 				break;
 		}
 
@@ -181,55 +183,43 @@ public class Hgd {
 		return Z.toBigInteger();
 	}
 
-	private static BigDecimal loggam(BigDecimal x) {
+	private final static BigDecimal[] a = new BigDecimal[] {
+			BigDecimal.valueOf(8.333333333333333e-02), BigDecimal.valueOf(-2.777777777777778e-03),
+			BigDecimal.valueOf(7.936507936507937e-04), BigDecimal.valueOf(-5.952380952380952e-04),
+			BigDecimal.valueOf(8.417508417508418e-04), BigDecimal.valueOf(-1.917526917526918e-03),
+			BigDecimal.valueOf(6.410256410256410e-03), BigDecimal.valueOf(-2.955065359477124e-02),
+			BigDecimal.valueOf(1.796443723688307e-01), BigDecimal.valueOf(-1.39243221690590e+00) };
 
-		double[] a = new double[] { 8.333333333333333e-02, -2.777777777777778e-03,
-				7.936507936507937e-04, -5.952380952380952e-04, 8.417508417508418e-04,
-				-1.917526917526918e-03, 6.410256410256410e-03, -2.955065359477124e-02,
-				1.796443723688307e-01, -1.39243221690590e+00 };
+	private static BigDecimal loggam(BigDecimal x) {
 
 		BigDecimal x0 = x;
 		int n = 0;
 
-		if (x.compareTo(BigDecimal.ONE) == 0 || x.compareTo(new BigDecimal("2.0")) == 0)
+		if (x.compareTo(BigDecimal.ONE) == 0 || x.compareTo(dec2) == 0)
 			return BigDecimal.ZERO;
-		else if (x.compareTo(new BigDecimal("7.0")) <= 0) {
+		else if (x.compareTo(dec7) <= 0) {
 			n = (int) (7.0 - x.doubleValue());
 			x0 = x.add(new BigDecimal(n));
 		}
 
 		BigDecimal x2 = BigDecimal.ONE.divide(x0.multiply(x0), OPE.PRECISION, OPE.RM);
-		double xp = 2 * Math.PI;
-		double gl0 = a[9];
 
-		// TODO double precision used
-		double x2d = x2.doubleValue();
+		BigDecimal gl0 = a[9];
+
 		for (int k = 8; k >= 0; k--) {
-			gl0 *= x2d;
-
-			gl0 += a[k];
+			gl0 = gl0.multiply(x2);
+			gl0 = gl0.add(a[k]);
 		}
 
-		// double precision
-		BigDecimal gl = new BigDecimal(gl0)
-				.divide(x0, OPE.PRECISION, OPE.RM)
-				.add(new BigDecimal(0.5 * Math.log(xp)))
-				.add(x0.subtract(new BigDecimal("0.5")).multiply(
-						new BigDecimal(Math.log(x0.doubleValue())))).subtract(x0);
+		BigDecimal gl = gl0.divide(x0, OPE.PRECISION, OPE.RM).add(log2p)
+				.add(x0.subtract(decHalf).multiply(BigDecimalUtils.ln(x0, bdPrecision)))
+				.subtract(x0);
 
-		if (x.compareTo(new BigDecimal("7.0")) <= 0) {
-
-			// double precision
-			double x0d = x0.doubleValue();
-			double gld = gl.doubleValue();
-
+		if (x.compareTo(dec7) <= 0)
 			for (int k = 1; k <= n + 1; k++) {
-				gld -= Math.log(x0d - 1.0);
-				x0d -= 1.0;
+				x0 = x0.subtract(BigDecimal.ONE);
+				gl = gl.subtract(BigDecimalUtils.ln(x0, bdPrecision));
 			}
-
-			gl = new BigDecimal(gld);
-		}
 
 		return gl;
 	}

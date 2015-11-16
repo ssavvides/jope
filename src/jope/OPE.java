@@ -6,7 +6,7 @@ import java.math.RoundingMode;
 
 public class OPE {
 
-	final static int PRECISION = 100;
+	final static int PRECISION = 10;
 	final static RoundingMode RM = RoundingMode.HALF_UP;
 
 	String key;
@@ -183,16 +183,17 @@ public class OPE {
 	public static void main(String[] args) {
 		OPE o = new OPE();
 
-		for (int i = -999999; i <= 999999; i++) {
+		for (int i = -99999; i <= 99999; i++) {
 
 			BigInteger p = new BigInteger("" + i);
+
 			BigInteger e = o.encrypt(p);
 			BigInteger d = o.decrypt(e);
 
 			if (d.compareTo(p) != 0)
 				throw new RuntimeException("failed: " + p + " " + d);
 
-			if (i % 1000 == 0)
+			if (i % 10 == 0)
 				System.out.println(e + " " + d);
 		}
 
