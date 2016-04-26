@@ -1,2 +1,2 @@
-# jope (experimental - not supported anymore)
+# jope (experimental)
 Order-preserving encryption in Java
