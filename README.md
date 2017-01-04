@@ -1,5 +1,5 @@
 # jope (experimental)
-Order-preserving encryption in Java
+A POC implementation of Order-preserving encryption in Java
 
 ## Requirments
 * Java Cryptography Extension (JCE) Unlimited Strength Jurisdiction Policy
